@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>isotau - Ocean Shader</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="files/main.css">
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+				background: #000;
+				overflow: hidden;
+				font-family: Arial, sans-serif;
+			}
+			#container {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+			}
+			#info {
+				position: absolute;
+				top: 20px;
+				left: 20px;
+				color: #fff;
+				font-size: 18px;
+				font-weight: bold;
+				text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+				z-index: 100;
+			}
+			#info a {
+				color: #fff;
+				text-decoration: none;
+			}
+			#info a:hover {
+				color: #4fc3f7;
+			}
+			#info small {
+				font-size: 12px;
+				opacity: 0.8;
+			}
+			
+			#terminal-overlay {
+				position: absolute;
+				top: 20px;
+				left: 20px;
+				z-index: 200;
+				display: none;
+				max-width: 500px;
+			}
+			
+			#terminal-text {
+				background: rgba(0, 0, 0, 0.9);
+				border: 1px solid #333;
+				border-radius: 4px;
+				padding: 15px;
+				font-family: 'Courier New', monospace;
+				font-size: 14px;
+				color: #00ff00;
+				line-height: 1.4;
+				backdrop-filter: blur(10px);
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+			}
+			
+			.terminal-line {
+				margin-bottom: 8px;
+			}
+			
+			.terminal-prompt {
+				color: #00ff00;
+			}
+			
+			.terminal-command {
+				color: #ffffff;
+			}
+			
+			.terminal-response {
+				color: #cccccc;
+			}
+			
+			.terminal-cursor {
+				animation: blink 1s infinite;
+			}
+			
+			@keyframes blink {
+				0%, 50% { opacity: 1; }
+				51%, 100% { opacity: 0; }
+			}
+		</style>
+	</head>
+	<body>
+
+		<div id="container"></div>
+		
+		<div id="terminal-overlay">
+			<div id="terminal-text"></div>
+		</div>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "./build/three.module.js",
+					"three/addons/": "./examples/jsm/"
+				}
+			}
+		</script>
+
+		<script type="module">
+
+			import * as THREE from 'three';
+			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+			import { Water } from 'three/addons/objects/Water.js';
+			import { Sky } from 'three/addons/objects/Sky.js';
+
+			let container;
+			let camera, scene, renderer;
+			let controls, water, sun;
+			let metallicObjects = [];
+			let raycaster, mouse;
+			let selectedObject = null;
+			let terminalVisible = false;
+			
+			// Movement variables
+			const keys = {};
+			const moveSpeed = 0.5;
+			
+			// Object data
+			const objectData = {
+				'ls.isotau.com': {
+					url: 'https://ls.isotau.com',
+					description: 'Simple todo list for in the moment',
+					terminalText: [
+						'> ls.isotau.com',
+						'',
+						'Simple todo list for in the moment',
+						'Built with React and modern web technologies',
+						'',
+						'> Click again to visit site'
+					]
+				},
+				'playlists.isotau.com': {
+					url: 'https://playlists.isotau.com',
+					description: 'All my playlists',
+					terminalText: [
+						'> playlists.isotau.com',
+						'',
+						'All my playlists and music collections',
+						'Curated tracks for different moods and moments',
+						'',
+						'> Click again to visit site'
+					]
+				},
+				'ffm.bio/isotrance': {
+					url: 'https://ffm.bio/isotrance',
+					description: 'All my music',
+					terminalText: [
+						'> ffm.bio/isotrance',
+						'',
+						'All my music and tracks',
+						'Original compositions and productions',
+						'',
+						'> Click again to visit site'
+					]
+				},
+				'isotau.com': {
+					url: 'https://isotau.com',
+					description: 'Main portfolio site',
+					terminalText: [
+						'> isotau.com',
+						'',
+						'Main portfolio site',
+						'Complete showcase of my work and projects',
+						'',
+						'> Click again to visit site'
+					]
+				}
+			};
+
+			init();
+
+			function init() {
+
+				container = document.getElementById( 'container' );
+
+				//
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setAnimationLoop( animate );
+				renderer.toneMapping = THREE.ACESFilmicToneMapping;
+				renderer.toneMappingExposure = 0.5;
+				container.appendChild( renderer.domElement );
+
+				//
+
+				scene = new THREE.Scene();
+
+				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 20000 );
+				camera.position.set( 0, 10, 50 );
+
+				// Add lighting for metallic objects
+				const ambientLight = new THREE.AmbientLight( 0x404040, 0.3 );
+				scene.add( ambientLight );
+
+				const directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
+				directionalLight.position.set( 50, 50, 50 );
+				scene.add( directionalLight );
+
+				//
+
+				sun = new THREE.Vector3();
+
+				// Water
+
+				const waterGeometry = new THREE.PlaneGeometry( 10000, 10000 );
+
+				water = new Water(
+					waterGeometry,
+					{
+						textureWidth: 512,
+						textureHeight: 512,
+						waterNormals: new THREE.TextureLoader().load( 'examples/textures/waternormals.jpg', function ( texture ) {
+
+							texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+
+						} ),
+						sunDirection: new THREE.Vector3(),
+						sunColor: 0xffffff,
+						waterColor: 0x001e0f,
+						distortionScale: 3.7,
+						fog: scene.fog !== undefined
+					}
+				);
+
+				water.rotation.x = - Math.PI / 2;
+
+				scene.add( water );
+
+				// Skybox
+
+				const sky = new Sky();
+				sky.scale.setScalar( 10000 );
+				scene.add( sky );
+
+				const skyUniforms = sky.material.uniforms;
+
+				skyUniforms[ 'turbidity' ].value = 10;
+				skyUniforms[ 'rayleigh' ].value = 2;
+				skyUniforms[ 'mieCoefficient' ].value = 0.005;
+				skyUniforms[ 'mieDirectionalG' ].value = 0.8;
+
+				const parameters = {
+					elevation: 2,
+					azimuth: 180
+				};
+
+				const pmremGenerator = new THREE.PMREMGenerator( renderer );
+				const sceneEnv = new THREE.Scene();
+
+				let renderTarget;
+
+				function updateSun() {
+
+					const phi = THREE.MathUtils.degToRad( 90 - parameters.elevation );
+					const theta = THREE.MathUtils.degToRad( parameters.azimuth );
+
+					sun.setFromSphericalCoords( 1, phi, theta );
+
+					sky.material.uniforms[ 'sunPosition' ].value.copy( sun );
+					water.material.uniforms[ 'sunDirection' ].value.copy( sun ).normalize();
+
+					if ( renderTarget !== undefined ) renderTarget.dispose();
+
+					sceneEnv.add( sky );
+					renderTarget = pmremGenerator.fromScene( sceneEnv );
+					scene.add( sky );
+
+					scene.environment = renderTarget.texture;
+
+				}
+
+				updateSun();
+
+				//
+
+				// Create metallic material
+				const metallicMaterial = new THREE.MeshStandardMaterial( { 
+					color: 0x888888,
+					metalness: 1.0,
+					roughness: 0.1,
+					envMapIntensity: 1.0
+				} );
+
+				// Create 4 different metallic objects
+				createMetallicObjects( metallicMaterial );
+
+				//
+
+				controls = new OrbitControls( camera, renderer.domElement );
+				controls.enableDamping = true;
+				controls.dampingFactor = 0.05;
+				controls.screenSpacePanning = false;
+				controls.minDistance = 5;
+				controls.maxDistance = 1000;
+				controls.maxPolarAngle = Math.PI / 2;
+				controls.target.set( 0, 0, 0 );
+				controls.update();
+
+				//
+
+				// Stats and GUI removed for cleaner interface
+
+				//
+
+				window.addEventListener( 'resize', onWindowResize );
+				
+				// Keyboard controls
+				window.addEventListener( 'keydown', onKeyDown );
+				window.addEventListener( 'keyup', onKeyUp );
+				
+				// Mouse controls for object interaction
+				raycaster = new THREE.Raycaster();
+				mouse = new THREE.Vector2();
+				
+				renderer.domElement.addEventListener( 'click', onMouseClick );
+
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function onKeyDown( event ) {
+				keys[ event.code ] = true;
+			}
+
+			function onKeyUp( event ) {
+				keys[ event.code ] = false;
+			}
+
+			function onMouseClick( event ) {
+				// Calculate mouse position in normalized device coordinates
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+				mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+				// Update the picking ray with the camera and mouse position
+				raycaster.setFromCamera( mouse, camera );
+
+				// Calculate objects intersecting the picking ray
+				const intersects = raycaster.intersectObjects( metallicObjects );
+
+				if ( intersects.length > 0 ) {
+					const clickedObject = intersects[ 0 ].object;
+					const objectName = clickedObject.userData.name;
+					
+					if ( selectedObject === clickedObject && terminalVisible ) {
+						// If clicking the same object again, visit the site
+						window.open( objectData[ objectName ].url, '_blank' );
+					} else {
+						// Show terminal for this object
+						selectedObject = clickedObject;
+						showTerminal( objectName );
+					}
+				} else {
+					// Clicked outside, hide terminal
+					hideTerminal();
+				}
+			}
+
+			function showTerminal( objectName ) {
+				terminalVisible = true;
+				const terminalOverlay = document.getElementById( 'terminal-overlay' );
+				terminalOverlay.style.display = 'block';
+				
+				typeTerminalText( objectData[ objectName ].terminalText );
+			}
+
+			function hideTerminal() {
+				terminalVisible = false;
+				selectedObject = null;
+				const terminalOverlay = document.getElementById( 'terminal-overlay' );
+				terminalOverlay.style.display = 'none';
+			}
+
+			function typeTerminalText( lines ) {
+				const terminalText = document.getElementById( 'terminal-text' );
+				terminalText.innerHTML = '';
+				
+				// Pre-create all line elements to prevent DOM manipulation glitches
+				lines.forEach( ( line, index ) => {
+					const lineElement = document.createElement( 'div' );
+					lineElement.className = 'terminal-line';
+					lineElement.style.minHeight = '1.4em'; // Prevent layout shifts
+					terminalText.appendChild( lineElement );
+				});
+				
+				let lineIndex = 0;
+				let charIndex = 0;
+				
+				function typeNextChar() {
+					if ( lineIndex < lines.length ) {
+						const line = lines[ lineIndex ];
+						const currentLine = terminalText.children[ lineIndex ];
+						
+						if ( charIndex < line.length ) {
+							// Build content without cursor first
+							let lineContent = '';
+							if ( line.startsWith( '>' ) ) {
+								lineContent = '<span class="terminal-prompt">' + line.substring( 0, charIndex + 1 ) + '</span>';
+							} else if ( line === '' ) {
+								lineContent = '<br>';
+							} else {
+								lineContent = '<span class="terminal-response">' + line.substring( 0, charIndex + 1 ) + '</span>';
+							}
+							
+							// Add cursor
+							if ( line !== '' ) {
+								lineContent += '<span class="terminal-cursor">_</span>';
+							}
+							
+							// Update content in one operation
+							currentLine.innerHTML = lineContent;
+							
+							charIndex++;
+							setTimeout( typeNextChar, 25 );
+						} else {
+							// Remove cursor from current line
+							if ( line !== '' ) {
+								currentLine.innerHTML = currentLine.innerHTML.replace( '<span class="terminal-cursor">_</span>', '' );
+							}
+							
+							// Move to next line
+							lineIndex++;
+							charIndex = 0;
+							setTimeout( typeNextChar, 60 );
+						}
+					}
+				}
+				
+				typeNextChar();
+			}
+
+			function createMetallicObjects( material ) {
+				// 1. Cube (ls.isotau.com)
+				const cubeGeometry = new THREE.BoxGeometry( 20, 20, 20 );
+				const cube = new THREE.Mesh( cubeGeometry, material );
+				cube.position.set( -50, 15, -30 );
+				cube.userData = { name: 'ls.isotau.com', desc: 'Simple todo list for in the moment' };
+				scene.add( cube );
+				metallicObjects.push( cube );
+
+				// 2. Sphere (playlists.isotau.com)
+				const sphereGeometry = new THREE.SphereGeometry( 15, 32, 32 );
+				const sphere = new THREE.Mesh( sphereGeometry, material );
+				sphere.position.set( 50, 15, -30 );
+				sphere.userData = { name: 'playlists.isotau.com', desc: 'All my playlists' };
+				scene.add( sphere );
+				metallicObjects.push( sphere );
+
+				// 3. Dodecahedron (ffm.bio/isotrance)
+				const dodecahedronGeometry = new THREE.DodecahedronGeometry( 15 );
+				const dodecahedron = new THREE.Mesh( dodecahedronGeometry, material );
+				dodecahedron.position.set( -50, 15, 30 );
+				dodecahedron.userData = { name: 'ffm.bio/isotrance', desc: 'All my music' };
+				scene.add( dodecahedron );
+				metallicObjects.push( dodecahedron );
+
+				// 4. Impossible triangle shape (isotau.com)
+				const triangleGeometry = createImpossibleTriangle();
+				const triangle = new THREE.Mesh( triangleGeometry, material );
+				triangle.position.set( 50, 15, 30 );
+				triangle.userData = { name: 'isotau.com', desc: 'Main portfolio site' };
+				scene.add( triangle );
+				metallicObjects.push( triangle );
+			}
+
+			function createImpossibleTriangle() {
+				const geometry = new THREE.BufferGeometry();
+				const vertices = [];
+				const indices = [];
+				
+				// Create a Penrose triangle-like shape
+				const size = 20;
+				const points = [
+					new THREE.Vector3( -size, -size, 0 ),
+					new THREE.Vector3( size, -size, 0 ),
+					new THREE.Vector3( 0, size, 0 ),
+					new THREE.Vector3( -size/2, -size/2, size ),
+					new THREE.Vector3( size/2, -size/2, size ),
+					new THREE.Vector3( 0, size/2, size ),
+					new THREE.Vector3( -size/2, -size/2, -size ),
+					new THREE.Vector3( size/2, -size/2, -size ),
+					new THREE.Vector3( 0, size/2, -size )
+				];
+				
+				// Add vertices
+				points.forEach( point => {
+					vertices.push( point.x, point.y, point.z );
+				});
+				
+				// Create faces for an impossible triangle shape
+				const faces = [
+					[0, 1, 2], [3, 4, 5], [6, 7, 8],
+					[0, 3, 6], [1, 4, 7], [2, 5, 8],
+					[0, 1, 4], [0, 4, 3], [1, 2, 5],
+					[1, 5, 4], [2, 0, 3], [2, 3, 5],
+					[3, 4, 7], [3, 7, 6], [4, 5, 8],
+					[4, 8, 7], [5, 3, 6], [5, 6, 8]
+				];
+				
+				faces.forEach( face => {
+					indices.push( face[0], face[1], face[2] );
+				});
+				
+				geometry.setIndex( indices );
+				geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+				geometry.computeVertexNormals();
+				
+				return geometry;
+			}
+
+			function handleMovement() {
+				const direction = new THREE.Vector3();
+				
+				if ( keys[ 'KeyW' ] || keys[ 'ArrowUp' ] ) {
+					direction.z -= 1;
+				}
+				if ( keys[ 'KeyS' ] || keys[ 'ArrowDown' ] ) {
+					direction.z += 1;
+				}
+				if ( keys[ 'KeyA' ] || keys[ 'ArrowLeft' ] ) {
+					direction.x -= 1;
+				}
+				if ( keys[ 'KeyD' ] || keys[ 'ArrowRight' ] ) {
+					direction.x += 1;
+				}
+				
+				if ( direction.length() > 0 ) {
+					// Apply camera rotation to movement direction
+					direction.normalize();
+					direction.applyQuaternion( camera.quaternion );
+					direction.y = 0; // Keep movement on horizontal plane
+					
+					// Move camera and controls target
+					camera.position.addScaledVector( direction, moveSpeed );
+					controls.target.addScaledVector( direction, moveSpeed );
+				}
+			}
+
+			function animate() {
+
+				handleMovement();
+				controls.update();
+				render();
+
+			}
+
+			function render() {
+
+				const time = performance.now() * 0.001;
+
+				// Animate all metallic objects
+				metallicObjects.forEach( ( obj, index ) => {
+					obj.position.y = Math.sin( time + index ) * 15 + 15;
+					obj.rotation.x = time * ( 0.3 + index * 0.1 );
+					obj.rotation.y = time * ( 0.4 + index * 0.1 );
+					obj.rotation.z = time * ( 0.2 + index * 0.1 );
+				});
+
+				water.material.uniforms[ 'time' ].value += 1.0 / 60.0;
+
+				renderer.render( scene, camera );
+
+			}
+
+		</script>
+	</body>
+</html>
