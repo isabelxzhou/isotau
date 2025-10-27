@@ -139,52 +139,65 @@
 			const keys = {};
 			const moveSpeed = 0.5;
 			
+			// Welcome terminal data
+			const welcomeTerminalText = [
+				'> welcome to iso tau\'s home',
+				'',
+				'point (0, 0, 0, ... ∞) of the universe',
+				'',
+				'where you can find some things i have created',
+				'and things i am working on',
+				'',
+				'> Click on objects to explore'
+			];
+			
 			// Object data
 			const objectData = {
 				'ls.isotau.com': {
 					url: 'https://ls.isotau.com',
-					description: 'Simple todo list for in the moment',
+					description: 'simple todo list for in the moment',
 					terminalText: [
 						'> ls.isotau.com',
 						'',
-						'Simple todo list for in the moment',
-						'Built with React and modern web technologies',
+						'simple todo list for in the moment',
+						'a vacuum of focus',
 						'',
 						'> Click again to visit site'
 					]
 				},
 				'playlists.isotau.com': {
 					url: 'https://playlists.isotau.com',
-					description: 'All my playlists',
+					description: 'all my playlists',
 					terminalText: [
 						'> playlists.isotau.com',
 						'',
-						'All my playlists and music collections',
-						'Curated tracks for different moods and moments',
+						'all my playlists and music collections',
+						'curated tracks for different moods and moments',
+						'ai that can make suggestions based on this',
 						'',
 						'> Click again to visit site'
 					]
 				},
 				'ffm.bio/isotrance': {
 					url: 'https://ffm.bio/isotrance',
-					description: 'All my music',
+					description: 'all my music',
 					terminalText: [
 						'> ffm.bio/isotrance',
 						'',
-						'All my music and tracks',
-						'Original compositions and productions',
+						'all my music and tracks',
+						'original compositions and productions',
 						'',
 						'> Click again to visit site'
 					]
 				},
 				'isotau.com': {
 					url: 'https://isotau.com',
-					description: 'Main portfolio site',
+					description: 'main portfolio site',
 					terminalText: [
 						'> isotau.com',
 						'',
-						'Main portfolio site',
-						'Complete showcase of my work and projects',
+						'main portfolio site',
+						'complete showcase of my work and projects',
 						'',
 						'> Click again to visit site'
 					]
@@ -347,6 +360,11 @@
 				mouse = new THREE.Vector2();
 				
 				renderer.domElement.addEventListener( 'click', onMouseClick );
+				
+				// Show welcome message after everything is initialized
+				setTimeout(() => {
+					showWelcomeTerminal();
+				}, 500);
 
 			}
 
@@ -396,23 +414,60 @@
 				}
 			}
 
+			function showWelcomeTerminal() {
+				try {
+					terminalVisible = true;
+					const terminalOverlay = document.getElementById( 'terminal-overlay' );
+					if ( !terminalOverlay ) return;
+					
+					terminalOverlay.style.display = 'block';
+					
+					typeTerminalText( welcomeTerminalText );
+					
+					// Hide terminal after 5 seconds
+					setTimeout(() => {
+						if ( selectedObject === null ) {
+							hideTerminal();
+						}
+					}, 5000 );
+				} catch ( error ) {
+					console.error( 'Error showing welcome terminal:', error );
+				}
+			}
+			
 			function showTerminal( objectName ) {
-				terminalVisible = true;
-				const terminalOverlay = document.getElementById( 'terminal-overlay' );
-				terminalOverlay.style.display = 'block';
-				
-				typeTerminalText( objectData[ objectName ].terminalText );
+				try {
+					if ( !objectName || !objectData[ objectName ] ) return;
+					
+					terminalVisible = true;
+					const terminalOverlay = document.getElementById( 'terminal-overlay' );
+					if ( !terminalOverlay ) return;
+					
+					terminalOverlay.style.display = 'block';
+					
+					typeTerminalText( objectData[ objectName ].terminalText );
+				} catch ( error ) {
+					console.error( 'Error showing terminal:', error );
+				}
 			}
 
 			function hideTerminal() {
-				terminalVisible = false;
-				selectedObject = null;
-				const terminalOverlay = document.getElementById( 'terminal-overlay' );
-				terminalOverlay.style.display = 'none';
+				try {
+					terminalVisible = false;
+					selectedObject = null;
+					const terminalOverlay = document.getElementById( 'terminal-overlay' );
+					if ( terminalOverlay ) {
+						terminalOverlay.style.display = 'none';
+					}
+				} catch ( error ) {
+					console.error( 'Error hiding terminal:', error );
+				}
 			}
 
 			function typeTerminalText( lines ) {
 				const terminalText = document.getElementById( 'terminal-text' );
+				if ( !terminalText ) return;
+				
 				terminalText.innerHTML = '';
 				
 				// Pre-create all line elements to prevent DOM manipulation glitches
@@ -474,7 +529,7 @@
 				const cubeGeometry = new THREE.BoxGeometry( 20, 20, 20 );
 				const cube = new THREE.Mesh( cubeGeometry, material );
 				cube.position.set( -50, 15, -30 );
-				cube.userData = { name: 'ls.isotau.com', desc: 'Simple todo list for in the moment' };
+				cube.userData = { name: 'ls.isotau.com', desc: 'simple todo list for in the moment' };
 				scene.add( cube );
 				metallicObjects.push( cube );
 
@@ -482,7 +537,7 @@
 				const sphereGeometry = new THREE.SphereGeometry( 15, 32, 32 );
 				const sphere = new THREE.Mesh( sphereGeometry, material );
 				sphere.position.set( 50, 15, -30 );
-				sphere.userData = { name: 'playlists.isotau.com', desc: 'All my playlists' };
+				sphere.userData = { name: 'playlists.isotau.com', desc: 'all my playlists' };
 				scene.add( sphere );
 				metallicObjects.push( sphere );
 
@@ -490,61 +545,23 @@
 				const dodecahedronGeometry = new THREE.DodecahedronGeometry( 15 );
 				const dodecahedron = new THREE.Mesh( dodecahedronGeometry, material );
 				dodecahedron.position.set( -50, 15, 30 );
-				dodecahedron.userData = { name: 'ffm.bio/isotrance', desc: 'All my music' };
+				dodecahedron.userData = { name: 'ffm.bio/isotrance', desc: 'all my music' };
 				scene.add( dodecahedron );
 				metallicObjects.push( dodecahedron );
 
-				// 4. Impossible triangle shape (isotau.com)
+				// 4. Octahedron - pyramid diamond (isotau.com)
 				const triangleGeometry = createImpossibleTriangle();
 				const triangle = new THREE.Mesh( triangleGeometry, material );
 				triangle.position.set( 50, 15, 30 );
-				triangle.userData = { name: 'isotau.com', desc: 'Main portfolio site' };
+				triangle.userData = { name: 'isotau.com', desc: 'main portfolio site' };
 				scene.add( triangle );
 				metallicObjects.push( triangle );
 			}
 
 			function createImpossibleTriangle() {
-				const geometry = new THREE.BufferGeometry();
-				const vertices = [];
-				const indices = [];
-				
-				// Create a Penrose triangle-like shape
-				const size = 20;
-				const points = [
-					new THREE.Vector3( -size, -size, 0 ),
-					new THREE.Vector3( size, -size, 0 ),
-					new THREE.Vector3( 0, size, 0 ),
-					new THREE.Vector3( -size/2, -size/2, size ),
-					new THREE.Vector3( size/2, -size/2, size ),
-					new THREE.Vector3( 0, size/2, size ),
-					new THREE.Vector3( -size/2, -size/2, -size ),
-					new THREE.Vector3( size/2, -size/2, -size ),
-					new THREE.Vector3( 0, size/2, -size )
-				];
-				
-				// Add vertices
-				points.forEach( point => {
-					vertices.push( point.x, point.y, point.z );
-				});
-				
-				// Create faces for an impossible triangle shape
-				const faces = [
-					[0, 1, 2], [3, 4, 5], [6, 7, 8],
-					[0, 3, 6], [1, 4, 7], [2, 5, 8],
-					[0, 1, 4], [0, 4, 3], [1, 2, 5],
-					[1, 5, 4], [2, 0, 3], [2, 3, 5],
-					[3, 4, 7], [3, 7, 6], [4, 5, 8],
-					[4, 8, 7], [5, 3, 6], [5, 6, 8]
-				];
-				
-				faces.forEach( face => {
-					indices.push( face[0], face[1], face[2] );
-				});
-				
-				geometry.setIndex( indices );
-				geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
-				geometry.computeVertexNormals();
-				
+				// Create an Octahedron (pyramid diamond) - like a diamond shape
+				const size = 15;
+				const geometry = new THREE.OctahedronGeometry( size );
 				return geometry;
 			}
 
